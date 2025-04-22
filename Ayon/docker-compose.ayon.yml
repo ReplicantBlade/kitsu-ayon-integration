@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:14
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ayon-net
+
+  redis:
+    image: redis:alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ayon-net
+
+  ayon:
+    image: ynput/ayon:latest
+    ports: 
+      - 5000:5000
+    environment:
+      AYON_POSTGRES_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+      KITSU_URL: ${KITSU_URL}
+      KITSU_LOGIN: ${KITSU_LOGIN}
+      KITSU_PASSWORD: ${KITSU_PASSWORD}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/info"]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - kitsu-ayon-net
+      - ayon-net
+
+    volumes:
+      - "./addons:/addons"
+      - "./storage:/storage"
+
+  worker:
+    hostname: worker
+    image: ynput/ayon-ash:latest
+    restart: unless-stopped
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    environment:
+      AYON_API_KEY: ${AYON_API_KEY}
+      AYON_SERVER_URL: http://ayon:5000
+    networks:
+      - kitsu-ayon-net
+
+volumes:
+  postgres_data:
+
+networks:
+  ayon-net:
+    driver: bridge
+  kitsu-ayon-net:
+    name: kitsu-ayon-net
+    external: true

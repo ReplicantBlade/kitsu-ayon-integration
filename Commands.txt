@@ -1,0 +1,6 @@
+docker network create kitsu-ayon-net
+
+docker-compose -f .\docker-compose.kitsu.yml up -d
+
+docker-compose -f .\docker-compose.ayon.yml up -d
+

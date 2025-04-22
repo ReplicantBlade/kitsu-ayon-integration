@@ -1,0 +1,116 @@
+version: '3.8'
+
+services:
+  kitsu:
+    container_name: cgwire-kitsu
+    image: ghcr.io/emberlightvfx/kitsu-for-docker:latest
+    depends_on:
+      - zou-app
+      - zou-event
+      - zou-jobs
+    ports:
+      - '8800:80'
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - kitsu-ayon-net
+
+  zou-app:
+    container_name: cgwire-zou-app
+    image: ghcr.io/emberlightvfx/zou-for-docker:latest
+    depends_on:
+      - db
+    volumes:
+      - 'previews:/opt/zou/previews'
+      - 'tmp:/tmp/zou'
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - kitsu-ayon-net
+    command: >
+      sh -c "/init_zou.sh && /upgrade_zou.sh && gunicorn --error-logfile - --access-logfile - -w 3 -k gevent -b :5000 zou.app:app"
+
+  zou-event:
+    container_name: cgwire-zou-event
+    image: ghcr.io/emberlightvfx/zou-for-docker:latest
+    depends_on:
+      - redis
+    volumes:
+      - 'previews:/opt/zou/previews'
+      - 'tmp:/tmp/zou'
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - kitsu-ayon-net
+    command: >
+      sh -c "gunicorn --error-logfile - --access-logfile - -w 1 -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker -b :5001 zou.event_stream:app"
+
+  zou-jobs:
+    container_name: cgwire-zou-jobs
+    image: ghcr.io/emberlightvfx/zou-for-docker:latest
+    volumes:
+      - 'previews:/opt/zou/previews'
+      - 'tmp:/tmp/zou'
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - kitsu-ayon-net
+    command: >
+      sh -c "rq worker -c zou.job_settings"
+
+  meilisearch:
+    container_name: cgwire-meilisearch
+    image: getmeili/meilisearch:v1.3.1
+    ports:
+      - "7700:7700"
+    volumes:
+      - 'meili_data:/meili_data'
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - kitsu-ayon-net
+
+  db:
+    container_name: cgwire-db-12
+    image: postgres:12-alpine
+    volumes:
+      - 'db:/var/lib/postgresql/data'
+      - ./db/pg_ctl.conf:/etc/postgresql/12/main/pg_ctl.conf:ro
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - kitsu-ayon-net
+
+  redis:
+    container_name: cgwire-redis
+    image: redis:alpine
+    volumes:
+      - 'redis:/data'
+    restart: unless-stopped
+    networks:
+      - kitsu-ayon-net
+
+volumes:
+  db:
+    name: zou-db-12
+  redis:
+    name: cgwire-redis
+  meili_data:
+    name: cgwire-meili_data
+  previews:
+    name: cgwire-previews
+  tmp:
+    name: cgwire-tmp
+  kitsu:
+    name: cgwire-kitsu
+
+networks:
+  kitsu-ayon-net:
+    name: kitsu-ayon-net
+    external: true
