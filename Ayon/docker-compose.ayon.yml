@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - '${POSTGRES_DATA_DIR}:/var/lib/postgresql/data'
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -21,6 +21,8 @@ services:
   redis:
     image: redis:alpine
     restart: unless-stopped
+    volumes:
+      - '${REDIS_DATA_DIR}:/data'
     healthcheck:
       test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
       interval: 5s
@@ -68,9 +70,6 @@ services:
       AYON_SERVER_URL: http://ayon:5000
     networks:
       - kitsu-ayon-net
-
-volumes:
-  postgres_data:
 
 networks:
   ayon-net:
